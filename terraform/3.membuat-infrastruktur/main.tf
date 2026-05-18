@@ -2,20 +2,25 @@ provider "aws" {
   region = "ap-southeast-1"
 }
 
-data "aws_ami" "ubuntu" {
+data "aws_ami" "amazon_linux" {
   most_recent = true
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+    values = ["al2023-ami-*-x86_64"]
   }
 
-  owners = ["099720109477"] # Canonical
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  owners = ["137112412989"] # Amazon
 }
 
 resource "aws_instance" "app_server" {
-  ami           = data.aws_ami.ubuntu.id
-  instance_type = "t2.micro"
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = "t3.micro" # perhatikan bagian ini untuk instance free tier
 
   tags = {
     Name = "learn-terraform"
