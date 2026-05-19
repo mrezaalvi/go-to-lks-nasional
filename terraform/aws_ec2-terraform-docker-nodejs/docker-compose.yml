@@ -1,0 +1,77 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro          # Letakkan sertifikat SSL di sini
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - app_network
+
+  app:
+    image: ${ECR_IMAGE:-app:latest}   # Pakai ECR image saat production
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: express_app
+    restart: unless-stopped
+    # Port 3000 TIDAK di-expose ke host — hanya bisa diakses Nginx via Docker network
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "127.0.0.1:3306:3306"   # Hanya accessible dari localhost EC2
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro  # Optional: SQL awal
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  app_network:
+    driver: bridge

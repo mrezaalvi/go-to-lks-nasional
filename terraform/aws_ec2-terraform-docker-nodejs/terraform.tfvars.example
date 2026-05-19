@@ -1,0 +1,20 @@
+# Salin file ini ke terraform.tfvars dan isi nilainya
+# JANGAN commit terraform.tfvars ke git!
+
+aws_region        = "ap-southeast-1"
+app_name          = "myapp"
+environment       = "production"
+ec2_instance_type = "t3.micro"
+
+# Key Pair — Terraform akan upload public key ini ke AWS
+# Generate dulu jika belum ada: ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa
+key_pair_name       = "myapp-keypair"
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+
+# Ganti dengan IP kamu: curl ifconfig.me
+ssh_allowed_cidr  = "x.x.x.x/32"
+
+db_name           = "myapp_db"
+db_user           = "myapp_user"
+db_password       = "ganti-dengan-password-kuat"
+db_root_password  = "ganti-dengan-root-password-kuat"
