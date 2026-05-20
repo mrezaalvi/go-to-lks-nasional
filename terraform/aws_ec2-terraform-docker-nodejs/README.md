@@ -54,86 +54,127 @@ WSL 2 (Windows Subsystem for Linux) memungkinkan kamu menjalankan semua perintah
 
 ## Arsitektur
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                          INTERNET                               │
-│                     (port 80 / 443)                             │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-                    ┌────────▼────────┐
-                    │   Elastic IP    │  ← IP tetap (tidak berubah
-                    │  (AWS Static)   │    saat EC2 restart)
-                    └────────┬────────┘
-                             │
-┌────────────────────────────▼────────────────────────────────────┐
-│                     EC2 Instance                                │
-│              (Amazon Linux 2023 / t3.micro)                     │
-│                                                                 │
-│   Security Group:                                               │
-│   ✅ Port 80   — HTTP (publik)                                  │
-│   ✅ Port 443  — HTTPS (publik)                                 │
-│   ✅ Port 22   — SSH (IP tertentu saja)                         │
-│   ❌ Port 3000 — Tidak dibuka ke publik                         │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                   Docker Compose                         │   │
-│  │                                                          │   │
-│  │  ┌─────────────────┐       ┌──────────────────────────┐ │   │
-│  │  │  nginx:alpine   │──────▶│   express_app (Node.js)  │ │   │
-│  │  │  port 80 / 443  │       │   expose 3000 (internal) │ │   │
-│  │  └─────────────────┘       └────────────┬─────────────┘ │   │
-│  │                                         │               │   │
-│  │                             ┌───────────▼─────────────┐ │   │
-│  │                             │   mysql_db (MySQL 8.0)  │ │   │
-│  │                             │   port 3306 (internal)  │ │   │
-│  │                             │   volume: mysql_data    │ │   │
-│  │                             └─────────────────────────┘ │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  IAM Role → ECR Read-Only (untuk docker pull)                   │
-└─────────────────────────────────────────────────────────────────┘
-                             ▲
-                             │ docker pull
-                    ┌────────┴────────┐
-                    │   Amazon ECR    │
-                    │   (Registry)    │
-                    └────────▲────────┘
-                             │ docker push
-                    ┌────────┴────────┐
-                    │    Developer    │
-                    │ (local machine) │
-                    └─────────────────┘
-                             ▲
-                             │ terraform apply
-                    ┌────────┴────────┐
-                    │    Terraform    │
-                    │ (provision EC2) │
-                    └─────────────────┘
+### Infrastruktur EC2
+
+```mermaid
+flowchart TB
+    INTERNET(["🌐 INTERNET\nport 80 / 443"])
+
+    EIP["🔒 Elastic IP\nIP tetap — tidak berubah\nsaat EC2 restart"]
+
+    subgraph EC2["EC2 Instance — Amazon Linux 2023 / t3.micro"]
+        SG["🛡️ Security Group\n✅ Port 80 — HTTP publik\n✅ Port 443 — HTTPS publik\n✅ Port 22 — SSH IP tertentu\n❌ Port 3000 — internal only"]
+
+        subgraph COMPOSE["Docker Compose"]
+            NGINX["📦 nginx:alpine\nport 80 / 443"]
+            APP["📦 express_app\nNode.js\nexpose 3000 internal"]
+            DB["📦 mysql_db\nMySQL 8.0\nport 3306 internal\nvolume: mysql_data"]
+        end
+
+        IAM["🔑 IAM Role\nECR Read-Only\ndocker pull"]
+    end
+
+    ECR["📦 Amazon ECR\nContainer Registry"]
+    DEV["💻 Developer\nlocal machine"]
+    TF["⚙️ Terraform\nprovision EC2"]
+
+    INTERNET --> EIP
+    EIP --> SG
+    SG --> NGINX
+    NGINX -->|"proxy ke port 3000"| APP
+    APP -->|"query"| DB
+    EC2 -->|"docker pull"| ECR
+    DEV -->|"docker push"| ECR
+    DEV -->|"terraform apply"| TF
+    TF -->|"provision"| EC2
+
+    style EC2 fill:#f0f7ff,stroke:#3b82f6
+    style COMPOSE fill:#e0f2fe,stroke:#0284c7
+    style INTERNET fill:#6b7280,color:#fff,stroke:#4b5563
+    style EIP fill:#8b5cf6,color:#fff,stroke:#7c3aed
+    style NGINX fill:#3b82f6,color:#fff,stroke:#2563eb
+    style APP fill:#10b981,color:#fff,stroke:#059669
+    style DB fill:#f59e0b,color:#fff,stroke:#d97706
+    style IAM fill:#ef4444,color:#fff,stroke:#dc2626
+    style ECR fill:#f97316,color:#fff,stroke:#ea580c
+    style DEV fill:#6b7280,color:#fff,stroke:#4b5563
+    style TF fill:#7c3aed,color:#fff,stroke:#6d28d9
+    style SG fill:#fef9c3,stroke:#ca8a04
 ```
 
-### Alur traffic request
+### Alur Traffic Request
 
-```
-User → Elastic IP :80/:443 → Nginx container → Express app :3000 → MySQL :3306
+```mermaid
+flowchart LR
+    U(["👤 User"])
+    EIP["Elastic IP\n:80 / :443"]
+    NGX["Nginx\ncontainer"]
+    EXP["Express App\n:3000"]
+    DB["MySQL\n:3306"]
+
+    U --> EIP --> NGX --> EXP --> DB
+
+    style U fill:#6b7280,color:#fff
+    style EIP fill:#8b5cf6,color:#fff
+    style NGX fill:#3b82f6,color:#fff
+    style EXP fill:#10b981,color:#fff
+    style DB fill:#f59e0b,color:#fff
 ```
 
-### Alur deployment
+### Alur Deployment
 
-```
-Developer
-  │
-  ├─ terraform apply ──────────────────────► AWS
-  │                                          ├─ ECR repository
-  │                                          ├─ IAM Role + Instance Profile
-  │                                          ├─ Key Pair
-  │                                          ├─ Security Group
-  │                                          ├─ EC2 Instance (+ user_data)
-  │                                          └─ Elastic IP
-  │
-  ├─ ./deploy.sh   (Linux/macOS/WSL) ─────► docker build → push → ECR
-  └─ .\deploy.ps1  (Windows PowerShell) ──► docker build → push → ECR
-                                                                    │
-                                                               EC2 (pull saat update)
+```mermaid
+flowchart TD
+    DEV["💻 Developer"]
+
+    subgraph LOCAL["Mesin Lokal"]
+        TF["⚙️ terraform apply"]
+        SH["🚀 deploy.sh\nLinux/macOS/WSL"]
+        PS["🚀 deploy.ps1\nWindows PowerShell"]
+    end
+
+    subgraph AWS["AWS"]
+        ECR["📦 Amazon ECR"]
+        subgraph INFRA["Infrastruktur yang dibuat"]
+            R1["ECR Repository"]
+            R2["IAM Role + Instance Profile"]
+            R3["Key Pair"]
+            R4["Security Group"]
+            R5["EC2 Instance + user_data"]
+            R6["Elastic IP"]
+        end
+    end
+
+    DEV --> TF
+    DEV --> SH
+    DEV --> PS
+
+    TF --> R1
+    TF --> R2
+    TF --> R3
+    TF --> R4
+    TF --> R5
+    TF --> R6
+
+    SH -->|"docker build + push"| ECR
+    PS -->|"docker build + push"| ECR
+
+    ECR -->|"docker pull saat update"| R5
+
+    style DEV fill:#6b7280,color:#fff
+    style LOCAL fill:#f0fdf4,stroke:#16a34a
+    style AWS fill:#fff7ed,stroke:#ea580c
+    style INFRA fill:#fef9c3,stroke:#ca8a04
+    style TF fill:#7c3aed,color:#fff
+    style SH fill:#0284c7,color:#fff
+    style PS fill:#0284c7,color:#fff
+    style ECR fill:#f97316,color:#fff
+    style R1 fill:#e5e7eb,stroke:#9ca3af
+    style R2 fill:#e5e7eb,stroke:#9ca3af
+    style R3 fill:#e5e7eb,stroke:#9ca3af
+    style R4 fill:#e5e7eb,stroke:#9ca3af
+    style R5 fill:#e5e7eb,stroke:#9ca3af
+    style R6 fill:#e5e7eb,stroke:#9ca3af
 ```
 
 ---
@@ -608,10 +649,18 @@ docker compose ps
 
 ### Docker Compose — Service dan dependency
 
-```
-nginx (port 80/443)
-  └── depends_on: app (healthy)
-        └── depends_on: mysql (healthy)
+```mermaid
+flowchart TD
+    NGX["📦 nginx\nport 80 / 443"]
+    APP["📦 express_app\nNode.js — port 3000"]
+    DB["📦 mysql_db\nMySQL 8.0 — port 3306"]
+
+    NGX -->|"depends_on: healthy"| APP
+    APP -->|"depends_on: healthy"| DB
+
+    style NGX fill:#3b82f6,color:#fff,stroke:#2563eb
+    style APP fill:#10b981,color:#fff,stroke:#059669
+    style DB fill:#f59e0b,color:#fff,stroke:#d97706
 ```
 
 ### Nginx — Konfigurasi reverse proxy
@@ -677,5 +726,3 @@ docker image prune -f
 | Tambah ke file   | `echo "teks" >> file`                        | `Add-Content file "teks"`                                                           |
 | Jalankan deploy  | `./deploy.sh v1.0.0`                         | `.\deploy.ps1 -Tag v1.0.0`                                                          |
 | Test HTTP        | `curl http://IP/health`                      | `Invoke-WebRequest -Uri "http://IP/health"`                                         |
-
-
