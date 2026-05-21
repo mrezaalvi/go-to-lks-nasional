@@ -1,6 +1,7 @@
 # security-group-simple.tf
 # Terraform kode sederhana untuk membuat AWS Security Group
 # Tanpa variabel — semua nilai langsung di dalam 1 file
+# Menggunakan Default VPC otomatis (tidak perlu VPC ID manual)
 
 terraform {
   required_version = ">= 1.5.0"
@@ -21,12 +22,20 @@ provider "aws" {
 }
 
 # ---------------------------------------------------
-# Security Group
+# Data Source — Ambil Default VPC secara otomatis
+# Tidak perlu tahu atau hardcode VPC ID
+# ---------------------------------------------------
+data "aws_vpc" "default" {
+  default = true
+}
+
+# ---------------------------------------------------
+# Security Group — dibuat di dalam Default VPC
 # ---------------------------------------------------
 resource "aws_security_group" "main" {
   name        = "myapp-production-sg"
   description = "Security group untuk EC2 myapp"
-  vpc_id      = "vpc-xxxxxxxx"  # Ganti dengan VPC ID kamu
+  vpc_id      = data.aws_vpc.default.id  # ← referensi ke Default VPC
 
   tags = {
     Name        = "myapp-production-sg"
@@ -87,4 +96,14 @@ resource "aws_vpc_security_group_egress_rule" "all_outbound" {
 output "security_group_id" {
   value       = aws_security_group.main.id
   description = "ID Security Group — gunakan ini saat membuat EC2"
+}
+
+output "default_vpc_id" {
+  value       = data.aws_vpc.default.id
+  description = "ID Default VPC yang digunakan secara otomatis"
+}
+
+output "default_vpc_cidr" {
+  value       = data.aws_vpc.default.cidr_block
+  description = "CIDR block Default VPC"
 }
