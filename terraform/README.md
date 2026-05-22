@@ -1,5 +1,12 @@
 1. [Instalasi AWS CLI](1.instalasi-aws-cli.md)
 2. [Instalasi Terraform](2.instalasi-terraform.md)
+3. [Simple AWS EC2 Security Group](3.simple-aws-ec2-security-group/README.md)
+4. [AWS Generate Keypair](4.aws-generate-keypair/README.md)
+5. [AWS VPC (Free Tier)](5.aws-vpc-free-tier/README.md)
+6. [AWS Budget](6.aws-budget/README.md)
+7. [AWS S3](7.aws-s3/README.md)
+8. [AWS EC2 Instance](8.aws-ec2-instance/README.md)
+9. [AWS Simple EC2 Instance](9.aws-simple-ec2-instance/README.md)
 
 * [Command AWS CLI](command-aws-cli.md)
 * [Command Terraform](command-terraform.md)
