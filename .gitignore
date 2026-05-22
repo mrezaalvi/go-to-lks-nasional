@@ -27,3 +27,6 @@ override.tf.json
 
 # Ignore plan output files
 *.tfplan
+
+# Ignore keypair
+*.pem
